@@ -1,5 +1,5 @@
-from fastapi import FastAPI, HTTPException, Request
-from pydantic import BaseModel
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from typing import Optional, Dict, Any
 import time
 
@@ -13,26 +13,32 @@ PROCESSED_INVOICES: Dict[str, Dict[str, Any]] = {}
 
 @app.get("/")
 def read_root():
-    return {"status": "online", "agent": "A2A Invoice Agent Vercel"}
+    return JSONResponse(
+        content={"status": "online", "agent": "A2A Invoice Agent Vercel"},
+        media_type="application/a2a+json"
+    )
 
 @app.get("/.well-known/agent-card.json")
 def get_agent_card():
-    return {
+    card_data = {
         "name": "A2A Invoice Agent",
         "description": "Safe decision-making invoice agent with idempotency and evidence citation.",
         "version": "1.0.0",
-        "url": "https://tds-week3-q2-k7s9hbuer-rajtiwariii.vercel.app/",
+        "url": "https://tds-week3-q2.vercel.app/",
         "endpoints": {
-            "message_send": "https://tds-week3-q2-k7s9hbuer-rajtiwariii.vercel.app/message:send"
+            "message_send": "https://tds-week3-q2.vercel.app/message:send"
         },
         "capabilities": ["invoice-processing", "idempotency", "evidence-citation"]
     }
+    return JSONResponse(
+        content=card_data,
+        media_type="application/a2a+json"
+    )
 
 @app.post("/message:send")
 async def message_send(request: Request):
     try:
         body = await request.json()
-        # Extract invoice details from incoming A2A payload safely
         payload = body.get("payload", body)
         invoice_id = payload.get("invoice_id", "INV-UNKNOWN")
         amount = float(payload.get("amount", 0.0))
@@ -40,10 +46,9 @@ async def message_send(request: Request):
         purchase_order_id = payload.get("purchase_order_id")
         supporting_evidence = payload.get("supporting_evidence")
 
-        # Idempotency check
         if invoice_id in PROCESSED_INVOICES:
             existing = PROCESSED_INVOICES[invoice_id]
-            return {
+            resp_data = {
                 "invoice_id": invoice_id,
                 "action": existing["action"],
                 "reason": "Duplicate request detected. Returning previously recorded state to prevent redundant payment.",
@@ -51,8 +56,8 @@ async def message_send(request: Request):
                 "status": "DUPLICATE_PREVENTED",
                 "timestamp": existing["timestamp"]
             }
+            return JSONResponse(content=resp_data, media_type="application/a2a+json")
 
-        # Business Logic
         action = "APPROVE"
         reason = "Invoice amount is within the approved threshold."
         
@@ -70,7 +75,7 @@ async def message_send(request: Request):
         }
         PROCESSED_INVOICES[invoice_id] = result_record
 
-        return {
+        resp_data = {
             "invoice_id": invoice_id,
             "action": action,
             "reason": reason,
@@ -78,5 +83,10 @@ async def message_send(request: Request):
             "status": "PROCESSED",
             "timestamp": result_record["timestamp"]
         }
+        return JSONResponse(content=resp_data, media_type="application/a2a+json")
     except Exception as e:
-        return {"error": str(e)}, 400
+        return JSONResponse(
+            content={"error": str(e)},
+            status_code=400,
+            media_type="application/a2a+json"
+        )
