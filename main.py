@@ -34,6 +34,19 @@ class InvoiceResponse(BaseModel):
 def read_root():
     return {"status": "online", "agent": "A2A Invoice Agent Vercel"}
 
+@app.get("/.well-known/agent-card.json")
+def get_agent_card():
+    return {
+        "name": "A2A Invoice Agent",
+        "description": "Safe decision-making invoice agent with idempotency and evidence citation.",
+        "version": "1.0.0",
+        "url": "https://tds-week3-q2.vercel.app/",
+        "endpoints": {
+            "process_invoice": "https://tds-week3-q2.vercel.app/process-invoice"
+        },
+        "capabilities": ["invoice-processing", "idempotency", "evidence-citation"]
+    }
+
 @app.post("/process-invoice", response_model=InvoiceResponse)
 async def process_invoice(payload: InvoiceRequest):
     invoice_id = payload.invoice_id
